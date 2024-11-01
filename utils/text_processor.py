@@ -7,7 +7,7 @@ from nltk.tag import pos_tag
 import re
 import pandas as pd
 
-def preprocess_text(text):
+def preprocess_text(text): # Different to Day 2 because also lemmatises
     """
     Clean and normalize text using NLTK.
     """
@@ -34,6 +34,7 @@ def preprocess_text(text):
     # Lemmatize based on POS tag
     lemmatizer = WordNetLemmatizer()
     tokens = pos_tag(tokens)
+    # Lemmatizes words either as verbs or nouns
     tokens = [
         lemmatizer.lemmatize(word, 'v') if tag.startswith('V')
         else lemmatizer.lemmatize(word)
