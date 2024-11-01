@@ -12,7 +12,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from sklearn.manifold import TSNE
 
-def analyze_vocabulary(texts, min_freq=2):
+def analyze_vocabulary(texts, min_freq=2): # same as Day 2
     """
     Analyze vocabulary distribution in a corpus.
     Returns word frequencies and vocabulary statistics.
@@ -52,9 +52,11 @@ def analyze_vocabulary(texts, min_freq=2):
     return freq_df, stats
 
 
-def tfidf_analyze_subreddit(posts, max_terms=1000, min_doc_freq=2, include_selftext=False):
+def tfidf_analyze_subreddit(posts, max_terms=1000, min_doc_freq=2, include_selftext=False): # new
     """
     Analyze a single subreddit's posts independently.
+    Generates TF-IDF matrix and vocabulary statistics.
+
     """
     # Combine title and optionally selftext
     texts = [
@@ -94,9 +96,10 @@ def generate_tfidf_matrix(texts, max_terms=1000, min_doc_freq=2):
     return tfidf_matrix, feature_names
 
 
-def create_posts_dataframe(posts):
+def create_posts_dataframe(posts): # new
     """
     Create DataFrame from Reddit posts with key metadata.
+    Metadate includes title, selftext, url, domain, time, and author.
     """
     df = pd.DataFrame([{
         'title': post.get('title'),
@@ -160,9 +163,10 @@ def get_top_terms(tfidf_results, n_terms=5):
         raise ValueError("tfidf_results must be DataFrame, Series or dict")
     return tfidf_scores_sorted.head(n_terms).index.tolist()
     
-def plot_word_timeseries(df, terms, figsize=(12, 6), include_selftext=False):
+def plot_word_timeseries(df, terms, figsize=(12, 6), include_selftext=False): # better to use my function
     """
     Plot time series for given terms.
+    Can only plot daily counts.
     
     Args:
         df: DataFrame with posts
@@ -227,8 +231,8 @@ def plot_word_similarities(tfidf_matrix, feature_names, n_terms=10, similarity_t
         tuple: (fig, ax) matplotlib objects
     """
     # Get top n terms based on mean TF-IDF scores
-    mean_tfidf = tfidf_matrix.mean(axis=0).A1
-    top_indices = mean_tfidf.argsort()[-n_terms:][::-1]
+    mean_tfidf = tfidf_matrix.mean(axis=0).A1 
+    top_indices = mean_tfidf.argsort()[-n_terms:][::-1] # get indices of top terms
     
     # Get vectors for top terms
     term_vectors = tfidf_matrix.T[top_indices].toarray()
@@ -247,7 +251,7 @@ def plot_word_similarities(tfidf_matrix, feature_names, n_terms=10, similarity_t
     ax.scatter(coords[:, 0], coords[:, 1])
     
     # Add word labels
-    for i, term in enumerate(top_terms):
+    for i, term in enumerate(top_terms): # add labels for top terms
         ax.annotate(
             term, 
             (coords[i, 0], coords[i, 1]), 
@@ -257,9 +261,9 @@ def plot_word_similarities(tfidf_matrix, feature_names, n_terms=10, similarity_t
     
     # Draw lines between similar terms
     for i in range(len(top_terms)):
-        for j in range(i+1, len(top_terms)):
-            if similarities[i,j] > similarity_threshold:
-                ax.plot([coords[i,0], coords[j,0]], 
+        for j in range(i+1, len(top_terms)): # each pair of terms is considered only once and avoids self-pairing
+            if similarities[i,j] > similarity_threshold: # only draw lines for similar terms
+                ax.plot([coords[i,0], coords[j,0]], # draw lines
                        [coords[i,1], coords[j,1]], 
                        'gray', alpha=0.3)
     if title: 
@@ -312,4 +316,79 @@ def plot_word_similarities_tsne(tfidf_matrix, feature_names, n_highlight=5, perp
     plt.tight_layout()
     return fig, ax
 
+# My own function
+
+def extract_term(term:str,string:pd.DataFrame,df:pd.DataFrame,name:str)->pd.DataFrame:
+    """
+    Extract the count of a term in a string and add it to a dataframe.
+    Needed for frequency_top_terms_ts function.
+    String is column of pd.DataFrame
+    """
+    string_series=pd.Series(string)
+    count=string_series.str.count(rf"\b{term}\b") # to make sure that we are only counting the word and not part of a word
+    df[f"count_{term}_{name}"]=count
+    return df
+
+def freq_top_terms_ts(df: pd.DataFrame, time_column: str, title_column: str, text_column: str, results: dict, subreddit: str, resampling: str) -> pd.DataFrame:
+    """
+    Plot the top terms by TF-IDF score for a subreddit.
+    If Reddit data stored as json need to convert to DataFrame first with create_posts_dataframe function.
+    """
+
+    df[time_column] = pd.to_datetime(df[time_column], unit="s") # convert to datetime
+    df = df[[time_column, title_column, text_column]] # keep only relevant columns
+
+    df[f"{text_column}_processed"] = df[text_column].apply(preprocess_text) # preprocess text
+    df[f"{title_column}_processed"] = df[title_column].apply(preprocess_text) # preprocess title
+    
+    top_words = results[subreddit]['top_terms']['term'].tolist() # turn top words by TF-IDF score into a list
+
+    # Extract term counts for each word in top_words
+    for word in top_words:
+        df = extract_term(word, df[f"{title_column}_processed"], df, "title")
+        df = extract_term(word, df[f"{text_column}_processed"], df, "text")
+
+    # Calculate total word count for each post
+    df["total_title"] = df[f"{title_column}_processed"].str.split().str.len()
+    df["total_text"] = df[f"{text_column}_processed"].str.split().str.len()
+    df["total_words"] = df["total_title"] + df["total_text"]
+     
+    # Calculate total count for each word
+    for word in top_words:
+        df[f"count_{word}_total"] = df[f"count_{word}_title"] + df[f"count_{word}_text"]
+        df.drop(columns=[f"count_{word}_title", f"count_{word}_text"], inplace=True)
+
+    # Group by time and sum counts
+    df_grouped = df.resample(resampling, on=time_column).sum()
+
+    # Calculate frequency for each word in top_words
+    for word in top_words:
+        df_grouped[f"frequency_{word}"] = df_grouped[f"count_{word}_total"] / df_grouped["total_words"]
+
+    return df_grouped
+
+
+def plot_freq_top_terms_ts (df_grouped:pd.DataFrame, results:dict, title:str, subreddit:str) -> None:
+    """
+    Plot the frequency of top terms by TF-IDF score in a subreddit as a time series.
+    Visualises results from freq_top_terms_ts function.
+    """
+    top_words=results[subreddit]['top_terms']['term'].tolist() # top words by TF-IDF score
+    
+    # Create axis and plot time series
+    fig, ax = plt.subplots(figsize=(15, 10))
+    for word in top_words:
+        df_grouped[f"frequency_{word}"].plot(ax=ax, label=word)
+    
+    # Format plot
+    ax.set_title(title)
+    ax.set_ylabel("Frequency")
+    ax.set_xlabel("Date")
+    ax.yaxis.set_major_formatter(PercentFormatter(1.0))
+    if len(df_grouped.index)<10:
+        ax.set_xticks(df_grouped.index)
+        ax.set_xticklabels(df_grouped.index.strftime('%Y-%m-%d'))
+    
+    plt.legend(fontsize=14)
+    plt.show()
 
