@@ -55,8 +55,7 @@ def analyze_vocabulary(texts, min_freq=2): # same as Day 2
 
 def tfidf_analyze_subreddit(posts, max_terms=1000, min_doc_freq=2, include_selftext=False): # new
     """
-    Analyze a single subreddit's posts independently.
-    Generates TF-IDF matrix and vocabulary statistics.
+    Generates TF-IDF matrix and vocabulary statistics for a subreddit/ multiple posts.
 
     """
     # Combine title and optionally selftext
