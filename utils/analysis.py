@@ -166,7 +166,7 @@ def get_top_terms(tfidf_results, n_terms=5):
 def plot_word_timeseries(df, terms, figsize=(12, 6), include_selftext=False): # better to use my function
     """
     Plot time series for given terms.
-    Can only plot daily counts.
+    Can only plot daily counts (absolute frequency).
     
     Args:
         df: DataFrame with posts
@@ -210,7 +210,7 @@ def plot_word_timeseries(df, terms, figsize=(12, 6), include_selftext=False): # 
     
     ax.set_title('Term Frequency Over Time')
     ax.set_xlabel('Date')
-    ax.set_ylabel('Frequency')
+    ax.set_ylabel('Absolute Frequency')
     ax.legend()
     plt.xticks(rotation=45)
     plt.tight_layout()
@@ -329,10 +329,11 @@ def extract_term(term:str,string:pd.DataFrame,df:pd.DataFrame,name:str)->pd.Data
     df[f"count_{term}_{name}"]=count
     return df
 
-def freq_top_terms_ts(df: pd.DataFrame, time_column: str, title_column: str, text_column: str, results: dict, subreddit: str, resampling: str) -> pd.DataFrame:
+def freq_top_terms_ts(df: pd.DataFrame, time_column: str, title_column: str, text_column: str, top_words: dict, subreddit: str, resampling: str) -> pd.DataFrame:
     """
     Plot the top terms by TF-IDF score for a subreddit.
     If Reddit data stored as json need to convert to DataFrame first with create_posts_dataframe function.
+    Counts relative frequency of top words.
     """
 
     df[time_column] = pd.to_datetime(df[time_column], unit="s") # convert to datetime
@@ -341,8 +342,6 @@ def freq_top_terms_ts(df: pd.DataFrame, time_column: str, title_column: str, tex
     df[f"{text_column}_processed"] = df[text_column].apply(preprocess_text) # preprocess text
     df[f"{title_column}_processed"] = df[title_column].apply(preprocess_text) # preprocess title
     
-    top_words = results[subreddit]['top_terms']['term'].tolist() # turn top words by TF-IDF score into a list
-
     # Extract term counts for each word in top_words
     for word in top_words:
         df = extract_term(word, df[f"{title_column}_processed"], df, "title")
