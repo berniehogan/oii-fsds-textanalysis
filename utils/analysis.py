@@ -11,6 +11,7 @@ from sklearn.manifold import MDS
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from sklearn.manifold import TSNE
+from matplotlib.ticker import PercentFormatter
 
 def analyze_vocabulary(texts, min_freq=2): # same as Day 2
     """
