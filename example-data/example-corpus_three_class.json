@@ -1,0 +1,32 @@
+{
+    "documents": [
+        ["The cat and dog played with me all day", "pets"],
+        ["My cat loves fish treats but my dogs do not", "pets"],
+        ["Dogs need daily walks to stay healthy", "pets"],
+        ["Kittens sleep all day but cats are more active", "pets"],
+        ["Veterinarians help sick pets", "pets"],
+        ["The cat was a good pet", "pets"],
+        ["My cat is a friendly cat who loves other cats and plays with the neighborhood cats. The cat food I buy is the best cat food for active cats.", "pets"],
+        ["The team won the game", "sports"],
+        ["Athletes train every day in preparation for the game", "sports"],
+        ["Coach called a timeout because the athelete was injured", "sports"],
+        ["One player on the winning team scored three goals", "sports"],
+        ["The big game is tomorrow but everyone is in good health", "sports"],
+        ["The goalie was a good player", "sports"],
+        ["The football team played a great game and the team showed real teamwork. The team's coach said the team practiced hard and the team deserved to win this important game.", "sports"],
+        ["The game was interrupted when a cat ran onto the field", "sports"],
+        ["My dog plays games with me", "pets"],
+        ["Developers write code using advanced programming tools", "tech"],
+        ["The code needs debugging before the software release", "tech"],
+        ["Software developers test their code frequently", "tech"],
+        ["The new video game uses advanced graphics software", "tech"],
+        ["Programmers develop software using coding languages", "tech"],
+        ["The software update fixed many coding issues", "tech"],
+        ["Developers share code through software repositories where they upload their code and share their software", "tech"],
+        ["The game software crashed due to coding errors", "tech"]
+        ],
+    "metadata": {
+        "description": "Corpus with distinct pet-related and sports-related terminology",
+        "version": "1.1"
+    }
+}
