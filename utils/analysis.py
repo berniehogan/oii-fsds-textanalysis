@@ -3,13 +3,13 @@ from collections import Counter
 from datetime import datetime
 import pandas as pd
 import numpy as np
+import nltk
 from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
 from utils.text_processor import preprocess_text
 import matplotlib.pyplot as plt
 from sklearn.manifold import MDS
 from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
 from sklearn.manifold import TSNE
 from matplotlib.ticker import PercentFormatter
 
@@ -17,6 +17,7 @@ def analyze_vocabulary(texts, min_freq=2): # same as Day 2
     """
     Analyze vocabulary distribution in a corpus.
     Returns word frequencies and vocabulary statistics.
+    Texts is list of strings.
     """
     
     # Preprocess texts
@@ -329,7 +330,7 @@ def extract_term(term:str,string:pd.DataFrame,df:pd.DataFrame,name:str)->pd.Data
     df[f"count_{term}_{name}"]=count
     return df
 
-def freq_top_terms_ts(df: pd.DataFrame, time_column: str, title_column: str, text_column: str, top_words: dict, subreddit: str, resampling: str) -> pd.DataFrame:
+def freq_top_terms_ts(df: pd.DataFrame, time_column: str, title_column: str, text_column: str, top_words: dict, resampling: str) -> pd.DataFrame:
     """
     Plot the top terms by TF-IDF score for a subreddit.
     If Reddit data stored as json need to convert to DataFrame first with create_posts_dataframe function.
@@ -337,7 +338,7 @@ def freq_top_terms_ts(df: pd.DataFrame, time_column: str, title_column: str, tex
     """
 
     df[time_column] = pd.to_datetime(df[time_column], unit="s") # convert to datetime
-    df = df[[time_column, title_column, text_column]] # keep only relevant columns
+    df = df[[time_column, title_column, text_column]].copy() # keep only relevant columns
 
     df[f"{text_column}_processed"] = df[text_column].apply(preprocess_text) # preprocess text
     df[f"{title_column}_processed"] = df[title_column].apply(preprocess_text) # preprocess title
@@ -367,13 +368,11 @@ def freq_top_terms_ts(df: pd.DataFrame, time_column: str, title_column: str, tex
     return df_grouped
 
 
-def plot_freq_top_terms_ts (df_grouped:pd.DataFrame, results:dict, title:str, subreddit:str) -> None:
+def plot_freq_top_terms_ts(df_grouped:pd.DataFrame, top_words:dict, title:str) -> None:
     """
     Plot the frequency of top terms by TF-IDF score in a subreddit as a time series.
     Visualises results from freq_top_terms_ts function.
     """
-    top_words=results[subreddit]['top_terms']['term'].tolist() # top words by TF-IDF score
-    
     # Create axis and plot time series
     fig, ax = plt.subplots(figsize=(15, 10))
     for word in top_words:
