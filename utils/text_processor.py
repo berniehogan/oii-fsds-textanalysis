@@ -7,6 +7,46 @@ from nltk.tag import pos_tag
 import re
 import pandas as pd
 
+def preprocess_text_option(text, option_stopwords, option_lemmatise, shortword): # Different to Day 2 because also lemmatises
+    """
+    Clean and normalize text using NLTK.
+    """
+    if pd.isna(text):
+        return ""
+    
+    # Convert to lowercase
+    text = text.lower()
+    
+    # Remove URLs
+    text = re.sub(r'http\S+|www\S+', '', text)
+    
+    # Remove special characters and numbers
+    text = re.sub(r'[^\w\s]', ' ', text)
+    text = re.sub(r'\d+', '', text)
+    
+    # Tokenize
+    tokens = word_tokenize(text)
+    
+    # Remove stopwords
+    if option_stopwords=="True":
+        stop_words = set(stopwords.words('english'))
+        tokens = [token for token in tokens if token not in stop_words]
+    
+    # Lemmatize based on POS tag
+    if option_lemmatise=="True":
+        lemmatizer = WordNetLemmatizer()
+        tokens = pos_tag(tokens)
+        # Lemmatizes words either as verbs or nouns
+        tokens = [lemmatizer.lemmatize(word, 'v') if tag.startswith('V')
+                  else lemmatizer.lemmatize(word)
+                  for word, tag in tokens
+                  ]
+    
+    # Remove short words
+    tokens = [token for token in tokens if len(token) > shortword]
+    
+    return ' '.join(tokens)
+
 def preprocess_text(text): # Different to Day 2 because also lemmatises
     """
     Clean and normalize text using NLTK.
@@ -35,11 +75,10 @@ def preprocess_text(text): # Different to Day 2 because also lemmatises
     lemmatizer = WordNetLemmatizer()
     tokens = pos_tag(tokens)
     # Lemmatizes words either as verbs or nouns
-    tokens = [
-        lemmatizer.lemmatize(word, 'v') if tag.startswith('V')
-        else lemmatizer.lemmatize(word)
-        for word, tag in tokens
-    ]
+    tokens = [lemmatizer.lemmatize(word, 'v') if tag.startswith('V')
+              else lemmatizer.lemmatize(word)
+              for word, tag in tokens
+              ]
     
     # Remove short words
     tokens = [token for token in tokens if len(token) > 2]
@@ -61,3 +100,43 @@ def split_label(label, max_line_length=25, max_lines=2):
     lines.append(temp_label)
     
     return '\n'.join(lines[:max_lines])
+
+def preprocess_text_hyphen(text, option_stopwords, option_lemmatise, shortword): # Different to Day 2 because also lemmatises
+    """
+    Clean and normalize text using NLTK.
+    """
+    if pd.isna(text):
+        return ""
+    
+    # Convert to lowercase
+    text = text.lower()
+    
+    # Remove URLs
+    text = re.sub(r'http\S+|www\S+', '', text)
+    
+    # Remove special characters and numbers
+    text = re.sub(r'[^\w\s-]', ' ', text)
+    text = re.sub(r'\d+', '', text)
+    
+    # Tokenize
+    tokens = word_tokenize(text)
+    
+    # Remove stopwords
+    if option_stopwords=="True":
+        stop_words = set(stopwords.words('english'))
+        tokens = [token for token in tokens if token not in stop_words]
+    
+    # Lemmatize based on POS tag
+    if option_lemmatise=="True":
+        lemmatizer = WordNetLemmatizer()
+        tokens = pos_tag(tokens)
+        # Lemmatizes words either as verbs or nouns
+        tokens = [lemmatizer.lemmatize(word, 'v') if tag.startswith('V')
+                  else lemmatizer.lemmatize(word)
+                  for word, tag in tokens
+                  ]
+    
+    # Remove short words
+    tokens = [token for token in tokens if len(token) > shortword]
+    
+    return ' '.join(tokens)

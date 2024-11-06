@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from sklearn.manifold import TSNE
+import seaborn as sns
 
 def analyze_vocabulary(texts, min_freq=2): # same as Day 2
     """
@@ -287,7 +288,8 @@ def plot_word_similarities_tsne(tfidf_matrix, feature_names, n_highlight=5, perp
     # Calculate t-SNE for all terms
     tsne = TSNE(n_components=2, 
                 perplexity=min(30, len(feature_names)/4), 
-                random_state=42)
+                random_state=42,
+                metric='cosine')
     coords = tsne.fit_transform(term_vectors)
     
     # Plot
@@ -321,7 +323,7 @@ def extract_term(term:str,string:pd.DataFrame,df:pd.DataFrame,name:str)->pd.Data
     """
     Extract the count of a term in a string and add it to a dataframe.
     Needed for frequency_top_terms_ts function.
-    String is column of pd.DataFrame
+    String is column of pd.DataFrame.
     """
     string_series=pd.Series(string)
     count=string_series.str.count(rf"\b{term}\b") # to make sure that we are only counting the word and not part of a word
@@ -414,7 +416,8 @@ def plot_similarities(tfidf_matrix, labels,
     if method == 'tsne':
         tsne = TSNE(n_components=2, 
                     perplexity=min(30, len(labels)-1),
-                    random_state=42)
+                    random_state=42,
+                    metric='cosine')
         coords = tsne.fit_transform(matrix)
     elif method == 'mds':
         mds = MDS(n_components=2, dissimilarity='precomputed', random_state=42)
@@ -425,7 +428,10 @@ def plot_similarities(tfidf_matrix, labels,
     
     # Create visualization
     fig, ax = plt.subplots(figsize=figsize)
-    scatter = ax.scatter(coords[:, 0], coords[:, 1], alpha=0.6)
+    if is_documents:
+        sns.scatterplot(x=coords[:, 0], y=coords[:, 1], alpha=0.6, hue=labels)
+    else:
+        ax.scatter(coords[:, 0], coords[:, 1], alpha=0.6)
     
     # Add labels
     if top_terms and isinstance(top_terms, int):
@@ -448,7 +454,7 @@ def plot_similarities(tfidf_matrix, labels,
         # Split long labels for documents
         if is_documents:
             label = split_label(label, 20)
-            
+    if  label_color:       
         ax.annotate(label, (coords_to_annotate[i, 0], coords_to_annotate[i, 1]),
                     xytext=(5, 5), textcoords='offset points',
                     fontsize=8 if is_documents else 12, alpha=0.7, color=color)
@@ -457,3 +463,115 @@ def plot_similarities(tfidf_matrix, labels,
     ax.set_title(title)
     ax.grid(True, linestyle='--', alpha=0.3)
     return fig, ax
+
+def most_informative_features(vectorizer, classifier, n=20):
+    feature_names = vectorizer.get_feature_names_out()
+    class_labels = classifier.classes_
+    top_features = {}
+
+    for i, class_label in enumerate(class_labels):
+        top_indices = classifier.feature_log_prob_[i].argsort()[-n:][::-1]
+        top_features[class_label] = [(feature_names[j], classifier.feature_log_prob_[i][j]) for j in top_indices]
+
+    return top_features
+
+def naive_bayes(minimum_occurrences_word: int, corpus_text: list, corpus_label: list, random: int, testsize: float, n=10, tfidf=True, report=True, tokenpattern=r"(?u)\b\w\w+\b"):
+    """
+    Function to perform Naive Bayes Classification on a given dataset and return the classification report.
+    - Corpus_text is a list of strings
+    - Corpus_label is a list of labels
+    - Random is the random state for the train_test_split
+    - Testsize is the size of the test set
+    - Tfidf is a boolean to determine if tfidf should be used
+    - Report is a boolean to determine if the classification report should be returned or the most informative features
+    - N is the number of most informative features to return
+    """
+    if tfidf:
+        vectorizer = TfidfVectorizer(min_df=minimum_occurrences_word, token_pattern=tokenpattern)
+        tfidf_matrix = vectorizer.fit_transform(corpus_text)
+    else:
+        vectorizer = CountVectorizer(min_df=minimum_occurrences_word)
+        tfidf_matrix = vectorizer.fit_transform(corpus_text)
+
+    # Split data for NBC
+    X_train, X_test, y_train, y_test = train_test_split(tfidf_matrix, corpus_label, test_size=testsize, random_state=random)
+
+    # Naive Bayes Classification
+    nbc = MultinomialNB()
+    nbc.fit(X_train, y_train)
+    nbc_pred = nbc.predict(X_test)
+    
+    if report:
+        return classification_report(y_test, nbc_pred)
+    
+    else:
+        top_features = most_informative_features(vectorizer, nbc, n)
+        top_features_df = pd.DataFrame()
+        for class_label, features in top_features.items(): 
+            top_features_df[class_label] = [(feature, f'{np.exp(score):.4f}') for feature, score in features]
+
+        return top_features_df
+    
+def k_means(minimum_occurrences_word: int, corpus_text: list, corpus_label: int, clusters: int, tokenpattern=r"(?u)\b\w\w+\b"):
+    
+    """Function to perform K-means clustering on a given dataset and plot the results"""
+    
+    vectorizer = TfidfVectorizer(min_df=minimum_occurrences_word, token_pattern=tokenpattern)
+    tfidf_matrix = vectorizer.fit_transform(corpus_text)
+    feature_names = vectorizer.get_feature_names_out()
+
+    # Create and fit the k-means model
+    kmeans = KMeans(n_clusters=clusters, random_state=42)
+    cluster_labels = kmeans.fit_predict(tfidf_matrix)
+
+    # Reduce dimensionality for plotting
+    tsne = TSNE(n_components=2, random_state=42, perplexity=min(30, len(feature_names)/4), metric='cosine')
+    tfidf_matrix_2d = tsne.fit_transform(tfidf_matrix.toarray())
+
+    # Shilouette score
+    silhouette_avg = silhouette_score(tfidf_matrix, cluster_labels)
+
+    # Plot the results
+    plt.figure(figsize=(10, 6))
+
+    # Plot the data points, colored by their cluster assignments
+    scatter = plt.scatter(tfidf_matrix_2d[:, 0], tfidf_matrix_2d[:, 1], c=cluster_labels, cmap=custom_cmap, alpha=0.7)
+    
+    # Plot the cluster centers
+    # cluster_centers_2d = tsne.fit_transform(kmeans.cluster_centers_)
+    # plt.scatter(cluster_centers_2d[:, 0], 
+                # cluster_centers_2d[:, 1], 
+                # c='red', 
+                # marker='x', 
+                # s=200, 
+                # linewidth=3, 
+                # label='Centroids')
+
+    plt.title(f'K-means Clustering (k={clusters})')
+    
+    # Add a legend
+    legend_labels = [f'Cluster {i}' for i in range(clusters)]
+    legend_handles = scatter.legend_elements()[0]  # Get the handles for the legend
+    plt.legend(legend_handles, legend_labels, title="Clusters", loc='upper right')
+
+    plt.show()
+
+     # Determine the majority label for each cluster
+    cluster_label_counts = {}
+    for cluster_label, true_label in zip(cluster_labels, corpus_label):
+        if cluster_label not in cluster_label_counts:
+            cluster_label_counts[cluster_label] = {}
+        if true_label not in cluster_label_counts[cluster_label]:
+            cluster_label_counts[cluster_label][true_label] = 0
+        cluster_label_counts[cluster_label][true_label] += 1
+
+    # Map clusters to majority labels
+    cluster_to_label = {
+      cluster: max(counts.items(), key=lambda x: x[1])[0]
+        for cluster, counts in cluster_label_counts.items()
+    }
+
+    # Convert cluster numbers to predicted labels
+    kmeans_pred = [cluster_to_label[label] for label in cluster_labels]
+    
+    return kmeans_pred, cluster_label_counts, cluster_to_label, silhouette_avg
