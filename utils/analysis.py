@@ -693,3 +693,50 @@ def plot_word_associations_tsne(tfidf_matrix, feature_names, target_word, n_high
     
     plt.tight_layout()
     return fig, ax
+
+def jaccard_similarity(set1, set2):
+    """
+    Calculate the Jaccard similarity between two sets.
+        
+    Inputs:
+    - set1: First set
+    - set2: Second set
+        
+    Returns:
+    - Jaccard similarity score
+    """
+    intersection = len(set1.intersection(set2))
+    union = len(set1.union(set2))
+    return intersection / union
+
+def jaccard_similarity_users(comments_df, posts):
+    """
+    Calculate the Jaccard similarity between users who commented on the posts
+
+    Inputs:
+    - comments_df: DataFrame containing the comments
+    - posts: list of dictionaries containing the posts and metadata
+    """
+    user_sets = []
+    for i in range(len(posts)):
+        post_comments = comments_df[comments_df['post_id'] == posts[i]['id']]
+        user_sets.append(set(post_comments['author']))
+
+    for i in range(3):
+        for j in range(i + 1, len(posts)):
+            jaccard_sim = jaccard_similarity(user_sets[i], user_sets[j])
+            print(f"Jaccard similarity between users who commented on post {i + 1} and post {j + 1}: {jaccard_sim:.4f}")
+
+def recurring_authors(df:pd.DataFrame, sort:str) -> float:
+    """
+    Calculate the fraction or sum of recurring authors in a dataframe
+    """
+    author_counts = Counter(df["author"])
+    recurring_authors_count = sum(1 for count in author_counts.values() if count > 1)
+    if sort == "fraction":
+        fraction_recurring=recurring_authors_count/len(author_counts)
+        return fraction_recurring
+    elif sort == "count":
+        return recurring_authors_count
+    else:
+        return "Invalid sort parameter. Choose 'fraction' or 'count'"

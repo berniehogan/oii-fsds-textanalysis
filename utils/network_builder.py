@@ -9,6 +9,8 @@ def usercomment_tree(comments_df, include_root=True):
     Create directed network of comments with optional root nodes.
     Add comments and replies of comments as nodes and connect them with edges.
     If include_root is True, add post nodes and connects posts with comments.
+
+    See Week 4 Day 2 for more information on how to visualise usercomment_tree.
     """
     G = nx.DiGraph() # Directed graph
     
@@ -183,3 +185,88 @@ def calculate_tree_width(tree):
     
     # The width of the tree is the maximum number of nodes at any level
     return level_counts
+
+def plot_user_interaction_network(comments_df:pd.DataFrame, n:int, title:str):
+    """
+    Function to plot the user interaction network and label the top n users with the highest degree centrality
+
+    Inputs:
+    - comments_df: pandas DataFrame containing the comments
+    - n: number of top users to label
+    """
+    plt.figure()
+    user_network = create_user_interaction_network(comments_df)  # undirected network
+    pos_users = nx.spring_layout(user_network, k=1, iterations=200)
+
+    degree_centrality = nx.degree_centrality(user_network)  # dictionary of degree centrality values for each node
+    node_color = [degree_centrality[node] for node in user_network.nodes()]  # put the degree centrality values into a list in the order of the node ids
+    node_size = [degree_centrality[node] * 10000 for node in user_network.nodes()]  # multiply the degree centrality values by 1000 to get the size of the nodes
+    nx.draw(user_network, pos_users, node_size=node_size, node_color=node_color, cmap=plt.cm.plasma)  # colour nodes based on centrality because node_color=node_color
+
+    # Label the top 3 nodes by in-degree centrality
+    top_nodes = sorted(degree_centrality, key=degree_centrality.get, reverse=True)[:n]  # get node id of top 3 authors with highest degree centrality
+
+    labels = {node: node for node in top_nodes}  # put names of top n authors into a dictionary (key and value is name of author)
+    nx.draw_networkx_labels(user_network, pos_users, labels=labels, font_color='white', bbox=dict(facecolor='black', alpha=0.5), verticalalignment='bottom', horizontalalignment='left')
+    plt.title(title)
+
+def visualize_similar_users(user_network, title="User Network - Most Similar Users Highlighted", number_of_similar_users=5, metric='cosine'):
+    """
+    Visualize the most similar users in a user interaction network.
+
+    Parameters:
+    - user_network: networkx.classes.graph.Graph
+    - number_of_similar_users: int, optional (default=10)
+    The number of similar user pairs to visualize.
+    - metric: str, optional (default='cosine')
+    The metric used to find similar users. Options are 'cosine' or 'euclidean'.
+    Cosine finds people that access network similarly
+    Euclidean finds people that are connected with many other people
+    """
+    similar_users = find_similar_users(user_network, metric=metric)
+
+    plt.figure(figsize=(10, 6))
+    pos = nx.spring_layout(user_network)
+
+    # Find the largest connected component
+    giant_component = max(nx.connected_components(user_network), key=len)
+    subgraph = user_network.subgraph(giant_component)
+
+    # Draw full network in gray
+    nx.draw(subgraph, pos, node_color='lightgray', edge_color='lightgray', width=1, node_size=100)
+
+     # Highlight similar pairs
+    for user1, user2, sim in similar_users[:number_of_similar_users]:
+        # Draw edge in red with width proportional to similarity
+        nx.draw_networkx_edges(subgraph, pos, 
+                                edgelist=[(user1, user2)],
+                                edge_color='red',
+                                width=sim*3)
+            
+        # Label nodes
+        nx.draw_networkx_labels(subgraph, pos, 
+                                   labels={user1: user1, user2: user2},
+                                   font_size=8)
+
+    plt.title(f"{title} ({metric.capitalize()} Similarity)")
+    plt.show()
+
+    for user1, user2, sim in similar_users[:number_of_similar_users]:
+        print(f"{user1} - {user2}: {sim:.3f}")
+
+def comment_depth(df,posts,limit=100):
+    """
+    Calculate the depth of the comment tree for each post in the dataframe
+
+    Inputs:
+    - df: DataFrame containing comments
+    - posts: list of dictionaries containing post information
+
+    """
+    depth_list = []
+    for i in range(0,limit-1):
+        post_comments = df[df['post_id'] == posts[i]['id']]
+        comment_tree = usercomment_tree(post_comments, include_root=True)
+        depth=depth = nx.dag_longest_path_length(comment_tree)
+        depth_list.append(depth)
+    return depth_list
