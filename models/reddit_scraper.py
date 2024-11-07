@@ -34,44 +34,33 @@ class RedditScraper:
         self.base_url = "https://api.reddit.com"
     
     @cache_results # indicates that the results of this method should be cached
-    def get_subreddit_posts(self, subreddit, limit=100, sort="new"): 
-        """
-        Fetches posts from a specified subreddit.
-        Args:
-            subreddit (str): The name of the subreddit to fetch posts from.
-            limit (int, optional): The maximum number of posts to fetch. Defaults to 100.
-            cache (bool, optional): Whether to cache the results. Defaults to False.
-            cache_duration_hours (int, optional): The duration to cache the results in hours. Defaults to 24.
-            sort (str, optional): The sorting method for posts. Defaults to 'new'.
-        Returns:
-            list: A list of posts from the specified subreddit.
-        """
-        url = f"{self.base_url}/r/{subreddit}/{sort}"
-        print(f"Fetching posts from {url}")
+    def get_subreddit_posts(self, subreddit, limit=1000, sort="new", cache=False, cache_duration_hours=24):
+        posts = []
+        after = None
         
-        params = {'limit': limit}
-        response = requests.get(url, headers=self.headers, params=params)
-        
-        if response.status_code == 200:
+        while len(posts) < limit:
+            url = f"{self.base_url}/r/{subreddit}/{sort}"
+            params = {
+                'limit': min(100, limit - len(posts)),
+                'after': after
+            }
+            
+            response = requests.get(url, headers=self.headers, params=params)
             data = response.json()
-            # Debug print
-            print(f"Response keys: {data.keys()}")
-            if 'data' in data:
-                posts = []
-                for post in data['data']['children']:
-                    post_data = post['data']
-                    posts.append({
-                        'id': post_data.get('id'),
-                        'title': post_data.get('title'),
-                        'selftext': post_data.get('selftext'),
-                        'author': post_data.get('author'),
-                        'score': post_data.get('score'),
-                        'created_utc': post_data.get('created_utc'),
-                        'num_comments': post_data.get('num_comments'),
-                        'url': post_data.get('url')
-                    })
-                return posts
-        return []
+            
+            if 'data' not in data:
+                break
+                
+            new_posts = data['data']['children']
+            if not new_posts:
+                break
+                
+            posts.extend([post['data'] for post in new_posts])
+            after = new_posts[-1]['data']['name']
+            
+            time.sleep(2)  # Rate limiting
+            
+        return posts[:limit]
     
     
     def get_post_comments(self, post_id):

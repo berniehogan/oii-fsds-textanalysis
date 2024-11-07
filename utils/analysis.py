@@ -1,23 +1,35 @@
 # utils/analysis.py
+# import packages
 from collections import Counter
 from datetime import datetime
 import pandas as pd
 import numpy as np
 import nltk
 from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from utils.text_processor import *
 import matplotlib.pyplot as plt
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-from sklearn.manifold import TSNE
+from sklearn.manifold import TSNE, MDS
 import seaborn as sns
+from models.reddit_scraper import RedditScraper
+import time
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import classification_report
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+from matplotlib.ticker import PercentFormatter
+
 
 def analyze_vocabulary(texts, min_freq=2): # same as Day 2
     """
     Analyze vocabulary distribution in a corpus.
     Returns word frequencies and vocabulary statistics.
-    Texts is list of strings.
+
+    Inputs:
+    - Texts is list of strings.
     """
     
     # Preprocess texts
@@ -58,6 +70,9 @@ def tfidf_analyze_subreddit(posts, max_terms=1000, min_doc_freq=2, include_selft
     """
     Generates TF-IDF matrix and vocabulary statistics for a subreddit/ multiple posts.
 
+    Inputs:
+    - posts is a list of dictionaries with post metadata.
+
     """
     # Combine title and optionally selftext
     texts = [
@@ -83,6 +98,9 @@ def tfidf_analyze_subreddit(posts, max_terms=1000, min_doc_freq=2, include_selft
 def generate_tfidf_matrix(texts, max_terms=1000, min_doc_freq=2):
     """
     Generate TF-IDF matrix and feature names from texts.
+
+    Inputs:
+    - texts is a list of strings
     """
 
     vectorizer = TfidfVectorizer(
@@ -101,6 +119,9 @@ def create_posts_dataframe(posts): # new
     """
     Create DataFrame from Reddit posts with key metadata.
     Metadate includes title, selftext, url, domain, time, and author.
+
+    Inputs:
+    - posts is a list of dictionaries with post metadata.
     """
     df = pd.DataFrame([{
         'title': post.get('title'),
@@ -115,6 +136,9 @@ def create_posts_dataframe(posts): # new
 def get_mean_tfidf(tfidf_matrix, feature_names=None, return_df=True):
     """
     Calculate mean TF-IDF score for each term in the matrix.
+
+    Inputs:
+    - tfidf_matrix from generate_tfidf_matrix.
     """
     
     mean_tfidf = tfidf_matrix.mean(axis=0).tolist()[0]
@@ -133,6 +157,9 @@ def get_mean_tfidf(tfidf_matrix, feature_names=None, return_df=True):
 def create_report(tfidf_matrix, feature_names, freq_df, vocab_stats):
     """
     Create results object from TF-IDF matrix and feature names.
+
+    Inputs:
+    - tfidf_matrix from generate_tfidf_matrix.
     """
     
     return {
@@ -465,6 +492,10 @@ def plot_similarities(tfidf_matrix, labels,
     return fig, ax
 
 def most_informative_features(vectorizer, classifier, n=20):
+    """
+    Most informative features from Naive Bayes classification.
+    
+    """
     feature_names = vectorizer.get_feature_names_out()
     class_labels = classifier.classes_
     top_features = {}
@@ -535,7 +566,7 @@ def k_means(minimum_occurrences_word: int, corpus_text: list, corpus_label: int,
     plt.figure(figsize=(10, 6))
 
     # Plot the data points, colored by their cluster assignments
-    scatter = plt.scatter(tfidf_matrix_2d[:, 0], tfidf_matrix_2d[:, 1], c=cluster_labels, cmap=custom_cmap, alpha=0.7)
+    scatter = plt.scatter(tfidf_matrix_2d[:, 0], tfidf_matrix_2d[:, 1], c=cluster_labels, alpha=0.7)
     
     # Plot the cluster centers
     # cluster_centers_2d = tsne.fit_transform(kmeans.cluster_centers_)
@@ -575,3 +606,90 @@ def k_means(minimum_occurrences_word: int, corpus_text: list, corpus_label: int,
     kmeans_pred = [cluster_to_label[label] for label in cluster_labels]
     
     return kmeans_pred, cluster_label_counts, cluster_to_label, silhouette_avg
+
+
+def get_comments_df(subreddit_name :str, sort:str, user_agent:str, limit:int) -> pd.DataFrame:
+    """
+    Get the comments of posts from Reddit
+
+    """
+    scraper = RedditScraper(user_agent) # Create a RedditScraper object
+    posts = scraper.get_subreddit_posts(subreddit_name, limit=limit, cache=False, sort=sort) # Get the top 3 posts from the subreddit
+    
+    print("Posts fetched")
+    # 2. Get the comments of the posts
+    comment_list = []   
+
+    for post in posts: # for each post in list of posts
+        comments = scraper.get_post_comments(post['id']) # get the comments of the post
+        comment_list.append(pd.DataFrame(comments)) # append the comments to the list of comments
+        time.sleep(2)
+    comments_df=pd.concat(comment_list)
+
+    return posts, comments_df
+
+def column_to_list(df, column1, column2):
+    """ 
+    Convert two columns of a dataframe into a list of lists in order to use them in a text processing exercise where need label and text.
+    """
+    return df[[column1, column2]].values.tolist()
+
+def plot_word_associations_tsne(tfidf_matrix, feature_names, target_word, n_highlight=5, title=None, zoom_factor=2, jitter_strength=0):
+    """
+    Plot word associations using t-SNE and highlight words closest to the target word after t-SNE.
+    """
+    # Get vectors for all terms
+    term_vectors = tfidf_matrix.T.toarray()
+    
+    # Calculate t-SNE for all terms
+    tsne = TSNE(n_components=2, 
+                perplexity=min(30, len(feature_names) / 4), 
+                random_state=42,
+                metric='cosine')
+    coords = tsne.fit_transform(term_vectors)
+    
+    # Find the index of the target word
+    if target_word not in feature_names:
+        print(f"'{target_word}' not found in feature names.")
+        return None, None
+    target_index = np.where(feature_names == target_word)[0][0]
+    
+    # Calculate distances from the target word in t-SNE space
+    distances = np.linalg.norm(coords - coords[target_index], axis=1)
+    
+    # Get the indices of the closest words (excluding the target word itself)
+    closest_indices = np.argsort(distances)[1:n_highlight + 1]  # Exclude the first one, which is the word itself
+    
+    # Highlight terms within the specified distance threshold
+    highlight_indices = [target_index] + closest_indices.tolist()
+    
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 10))
+    
+    # Plot all points in light gray
+    ax.scatter(coords[:, 0], coords[:, 1], c='lightgray', alpha=0.5, s=30)
+    
+    # Highlight top terms including the target word
+    ax.scatter(coords[highlight_indices, 0], coords[highlight_indices, 1], c='#4682B4', s=100)
+    
+    # Add labels for highlighted terms
+    texts = []
+    for i in highlight_indices:
+        jitter_x = np.random.uniform(-jitter_strength, jitter_strength)
+        jitter_y = np.random.uniform(-jitter_strength, jitter_strength)
+        texts.append(ax.text(coords[i, 0] + jitter_x, coords[i, 1] + jitter_y, feature_names[i], fontsize=14,
+                             bbox=dict(facecolor='white', edgecolor='gray', alpha=0.7)))
+
+    # Set limits to zoom into the area around the target word
+    x_min, x_max = coords[highlight_indices, 0].min() - zoom_factor, coords[highlight_indices, 0].max() + zoom_factor
+    y_min, y_max = coords[highlight_indices, 1].min() - zoom_factor, coords[highlight_indices, 1].max() + zoom_factor
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min, y_max)
+    
+    if title:
+        ax.set_title(f'Word Associations with "{target_word}" in {title} (Closest {n_highlight} Words Highlighted)')
+    else:
+        ax.set_title(f'Word Associations with "{target_word}" (Closest {n_highlight} Words Highlighted)')
+    
+    plt.tight_layout()
+    return fig, ax

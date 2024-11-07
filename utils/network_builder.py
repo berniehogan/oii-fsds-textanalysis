@@ -1,8 +1,10 @@
 # utils/network_builder.py
 import networkx as nx
 import pandas as pd
+from models.reddit_scraper import RedditScraper
+import time
 
-def create_comment_tree(comments_df, include_root=True):
+def usercomment_tree(comments_df, include_root=True):
     """
     Create directed network of comments with optional root nodes.
     Add comments and replies of comments as nodes and connect them with edges.
@@ -60,6 +62,7 @@ def create_user_post_network(comments_df):
     """
     Create bipartite network of users and posts.
     Connects authors of comments and replies to posts.
+    Use bipartite_layout to visualize the network.
     """
     G = nx.Graph()
     
@@ -158,3 +161,25 @@ def get_network_stats(G):
         'density': nx.density(G),
         'components': nx.number_connected_components(G)
     }
+
+
+def calculate_tree_width(tree):
+    """
+    Calculate width of a comment tree.
+    - tree: NetworkX DiGraph representing the comment tree from usercomment_tree.
+    """
+    # Find the root node (node with no incoming edges)
+    root = [node for node, degree in tree.in_degree() if degree == 0][0]
+    
+    # Get the shortest path lengths from the root (essentially the level of each node)
+    levels = nx.single_source_shortest_path_length(tree, root)
+    
+    # Count the nodes at each level (i.e., the width at each level)
+    level_counts = {}
+    for level in levels.values():
+        if level not in level_counts:
+            level_counts[level] = 0
+        level_counts[level] += 1
+    
+    # The width of the tree is the maximum number of nodes at any level
+    return level_counts
